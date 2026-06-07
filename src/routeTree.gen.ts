@@ -9,14 +9,56 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TeachingRouteImport } from './routes/teaching'
+import { Route as StudentsRouteImport } from './routes/students'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ProgramsRouteImport } from './routes/programs'
+import { Route as ParentsRouteImport } from './routes/parents'
 import { Route as LessonPlanningRouteImport } from './routes/lesson-planning'
+import { Route as GradingRouteImport } from './routes/grading'
 import { Route as FormsRouteImport } from './routes/forms'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TeachingRoute = TeachingRouteImport.update({
+  id: '/teaching',
+  path: '/teaching',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudentsRoute = StudentsRouteImport.update({
+  id: '/students',
+  path: '/students',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramsRoute = ProgramsRouteImport.update({
+  id: '/programs',
+  path: '/programs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ParentsRoute = ParentsRouteImport.update({
+  id: '/parents',
+  path: '/parents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LessonPlanningRoute = LessonPlanningRouteImport.update({
   id: '/lesson-planning',
   path: '/lesson-planning',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GradingRoute = GradingRouteImport.update({
+  id: '/grading',
+  path: '/grading',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FormsRoute = FormsRouteImport.update({
@@ -39,43 +81,154 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/forms': typeof FormsRoute
+  '/grading': typeof GradingRoute
   '/lesson-planning': typeof LessonPlanningRoute
+  '/parents': typeof ParentsRoute
+  '/programs': typeof ProgramsRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/students': typeof StudentsRoute
+  '/teaching': typeof TeachingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/forms': typeof FormsRoute
+  '/grading': typeof GradingRoute
   '/lesson-planning': typeof LessonPlanningRoute
+  '/parents': typeof ParentsRoute
+  '/programs': typeof ProgramsRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/students': typeof StudentsRoute
+  '/teaching': typeof TeachingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/forms': typeof FormsRoute
+  '/grading': typeof GradingRoute
   '/lesson-planning': typeof LessonPlanningRoute
+  '/parents': typeof ParentsRoute
+  '/programs': typeof ProgramsRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/students': typeof StudentsRoute
+  '/teaching': typeof TeachingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agents' | '/forms' | '/lesson-planning'
+  fullPaths:
+    | '/'
+    | '/agents'
+    | '/forms'
+    | '/grading'
+    | '/lesson-planning'
+    | '/parents'
+    | '/programs'
+    | '/reports'
+    | '/settings'
+    | '/students'
+    | '/teaching'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agents' | '/forms' | '/lesson-planning'
-  id: '__root__' | '/' | '/agents' | '/forms' | '/lesson-planning'
+  to:
+    | '/'
+    | '/agents'
+    | '/forms'
+    | '/grading'
+    | '/lesson-planning'
+    | '/parents'
+    | '/programs'
+    | '/reports'
+    | '/settings'
+    | '/students'
+    | '/teaching'
+  id:
+    | '__root__'
+    | '/'
+    | '/agents'
+    | '/forms'
+    | '/grading'
+    | '/lesson-planning'
+    | '/parents'
+    | '/programs'
+    | '/reports'
+    | '/settings'
+    | '/students'
+    | '/teaching'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   FormsRoute: typeof FormsRoute
+  GradingRoute: typeof GradingRoute
   LessonPlanningRoute: typeof LessonPlanningRoute
+  ParentsRoute: typeof ParentsRoute
+  ProgramsRoute: typeof ProgramsRoute
+  ReportsRoute: typeof ReportsRoute
+  SettingsRoute: typeof SettingsRoute
+  StudentsRoute: typeof StudentsRoute
+  TeachingRoute: typeof TeachingRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/teaching': {
+      id: '/teaching'
+      path: '/teaching'
+      fullPath: '/teaching'
+      preLoaderRoute: typeof TeachingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/students': {
+      id: '/students'
+      path: '/students'
+      fullPath: '/students'
+      preLoaderRoute: typeof StudentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/programs': {
+      id: '/programs'
+      path: '/programs'
+      fullPath: '/programs'
+      preLoaderRoute: typeof ProgramsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/parents': {
+      id: '/parents'
+      path: '/parents'
+      fullPath: '/parents'
+      preLoaderRoute: typeof ParentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lesson-planning': {
       id: '/lesson-planning'
       path: '/lesson-planning'
       fullPath: '/lesson-planning'
       preLoaderRoute: typeof LessonPlanningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/grading': {
+      id: '/grading'
+      path: '/grading'
+      fullPath: '/grading'
+      preLoaderRoute: typeof GradingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forms': {
@@ -106,7 +259,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   FormsRoute: FormsRoute,
+  GradingRoute: GradingRoute,
   LessonPlanningRoute: LessonPlanningRoute,
+  ParentsRoute: ParentsRoute,
+  ProgramsRoute: ProgramsRoute,
+  ReportsRoute: ReportsRoute,
+  SettingsRoute: SettingsRoute,
+  StudentsRoute: StudentsRoute,
+  TeachingRoute: TeachingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
