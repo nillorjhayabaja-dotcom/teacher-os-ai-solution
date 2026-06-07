@@ -20,7 +20,7 @@ export function ModulePreview({
         title={title}
         description={description}
         actions={
-          <Link to={primaryLink}>
+          <Link to={primaryLink as string}>
             <Button className="gap-2"><Sparkles className="size-4"/>Open AI Agent</Button>
           </Link>
         }
@@ -50,7 +50,7 @@ export function ModulePreview({
         </div>
 
         <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-          <Link to="/" className="inline-flex items-center gap-1 text-primary font-medium hover:underline">
+          <Link to={"/" as string} className="inline-flex items-center gap-1 text-primary font-medium hover:underline">
             Back to Dashboard <ArrowRight className="size-3"/>
           </Link>
         </div>
