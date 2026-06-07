@@ -5,7 +5,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const nav = [
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof Home;
+  badge?: string;
+  accent?: boolean;
+};
+
+const nav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home },
   { to: "/teaching", label: "Teaching Workflow", icon: CalendarDays },
   { to: "/lesson-planning", label: "Lesson Planning", icon: BookOpen },
@@ -17,7 +25,7 @@ const nav = [
   { to: "/programs", label: "School Programs", icon: School },
   { to: "/agents", label: "AI Agent Workspace", icon: Bot, accent: true },
   { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export function SidebarNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
