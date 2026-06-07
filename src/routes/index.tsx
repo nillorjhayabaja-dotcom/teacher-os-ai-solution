@@ -52,7 +52,7 @@ function DashboardPage() {
       {/* Quick actions */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {quickActions.map((a) => (
-          <Link key={a.to} to={a.to}
+          <Link key={a.to} to={a.to as string}
             className="group rounded-xl border border-border bg-card p-4 hover:border-primary hover:shadow-elegant transition-all">
             <div className={cn(
               "size-9 rounded-lg grid place-items-center mb-3",
