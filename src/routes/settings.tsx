@@ -18,30 +18,34 @@ function SettingsPage() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Section title="Teacher profile">
-          <Row label="Name" value="Mariel Reyes"/>
-          <Row label="Position" value="Teacher I"/>
-          <Row label="DepEd ID" value="0023-4587-201"/>
-          <Row label="School" value="Sampaloc Elementary School"/>
-          <Row label="Division" value="Bulacan"/>
+          <Row label="Name" value="Mariel Reyes" />
+          <Row label="Position" value="Teacher I" />
+          <Row label="DepEd ID" value="0023-4587-201" />
+          <Row label="School" value="Sampaloc Elementary School" />
+          <Row label="Division" value="Bulacan" />
         </Section>
 
         <Section title="Sections & subjects">
-          <Row label="Advisory" value="Grade 6 – Sampaguita"/>
-          <Row label="Subjects" value="Math 6, Science 6, English 6"/>
-          <Row label="Co-teachers" value="3 linked"/>
+          <Row label="Advisory" value="Grade 6 – Sampaguita" />
+          <Row label="Subjects" value="Math 6, Science 6, English 6" />
+          <Row label="Co-teachers" value="3 linked" />
         </Section>
 
         <Section title="AI preferences">
-          <Row label="Default language" value="English + Tagalog"/>
-          <Row label="Auto-generate DLL on Sunday" value="Enabled"/>
-          <Row label="Risk scan frequency" value="Daily 6:00 AM"/>
+          <Row label="Default language" value="English + Tagalog" />
+          <Row label="Auto-generate DLL on Sunday" value="Enabled" />
+          <Row label="Risk scan frequency" value="Daily 6:00 AM" />
         </Section>
 
         <Section title="Offline & sync">
-          <Row label="Cache lessons offline" value="On"/>
-          <Row label="Cache forms offline" value="On"/>
-          <Row label="Last sync" value="2 min ago"/>
-          <div className="pt-2"><Button size="sm" variant="outline">Force sync</Button></div>
+          <Row label="Cache lessons offline" value="On" />
+          <Row label="Cache forms offline" value="On" />
+          <Row label="Last sync" value="2 min ago" />
+          <div className="pt-2">
+            <Button size="sm" variant="outline">
+              Force sync
+            </Button>
+          </div>
         </Section>
       </div>
     </div>

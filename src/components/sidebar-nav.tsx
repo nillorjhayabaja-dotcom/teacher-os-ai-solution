@@ -1,7 +1,17 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Home, CalendarDays, BookOpen, Calculator, FileText, Users,
-  MessageSquare, BarChart3, School, Bot, Settings, Sparkles,
+  Home,
+  CalendarDays,
+  BookOpen,
+  Calculator,
+  FileText,
+  Users,
+  MessageSquare,
+  BarChart3,
+  School,
+  Bot,
+  Settings,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

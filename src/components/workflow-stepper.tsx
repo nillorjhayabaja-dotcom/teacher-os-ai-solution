@@ -4,8 +4,14 @@ import { Check } from "lucide-react";
 export type Step = { id: number; title: string; desc?: string };
 
 export function WorkflowStepper({
-  steps, current, onSelect,
-}: { steps: Step[]; current: number; onSelect?: (n: number) => void }) {
+  steps,
+  current,
+  onSelect,
+}: {
+  steps: Step[];
+  current: number;
+  onSelect?: (n: number) => void;
+}) {
   return (
     <ol className="flex flex-wrap gap-2">
       {steps.map((s) => {
@@ -33,7 +39,9 @@ export function WorkflowStepper({
                 >
                   {done ? <Check className="size-3.5" /> : s.id}
                 </span>
-                <span className={cn("text-sm font-medium", active && "text-primary")}>{s.title}</span>
+                <span className={cn("text-sm font-medium", active && "text-primary")}>
+                  {s.title}
+                </span>
               </div>
               {s.desc && <p className="mt-1 text-xs text-muted-foreground pl-8">{s.desc}</p>}
             </button>

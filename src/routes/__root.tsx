@@ -79,10 +79,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "TeacherOS — AI Operating System for Filipino Teachers" },
-      { name: "description", content: "DepEd-aligned Teacher Operating System: lesson planning, grading, SF forms, and student intelligence — automated end-to-end." },
+      {
+        name: "description",
+        content:
+          "DepEd-aligned Teacher Operating System: lesson planning, grading, SF forms, and student intelligence — automated end-to-end.",
+      },
       { name: "author", content: "TeacherOS" },
       { property: "og:title", content: "TeacherOS — AI Operating System for Filipino Teachers" },
-      { property: "og:description", content: "Replace 50–80% of teacher admin work. DLL, SF1–SF10, grading, and parent comms in one workflow OS." },
+      {
+        property: "og:description",
+        content:
+          "Replace 50–80% of teacher admin work. DLL, SF1–SF10, grading, and parent comms in one workflow OS.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
