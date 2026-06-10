@@ -1,0 +1,1 @@
+"""AI API Layer — FastAPI routers for AI endpoints."""

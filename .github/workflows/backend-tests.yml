@@ -1,0 +1,124 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-typecheck-unit:
+    name: Lint, Type Check, Unit Tests, Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install factory-boy faker respx testcontainers[postgres,redis] pytest-mock bandit
+
+      - name: Lint
+        run: ruff check backend/src tests
+
+      - name: Type Check
+        run: mypy backend/src --ignore-missing-imports
+
+      - name: Unit tests with coverage gate
+        run: pytest tests/unit tests/agents tests/tools tests/rag tests/workflows tests/events tests/security tests/observability --cov-fail-under=80
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            coverage.xml
+            htmlcov
+
+  integration-contract-performance:
+    name: Integration, API Contracts, Performance Smoke
+    runs-on: ubuntu-latest
+    needs: lint-typecheck-unit
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: teacheros
+          POSTGRES_PASSWORD: teacheros
+          POSTGRES_DB: teacheros_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U teacheros"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install factory-boy faker respx testcontainers[postgres,redis] pytest-mock bandit
+
+      - name: Integration and contract tests
+        env:
+          DATABASE_URL: postgresql+psycopg://teacheros:teacheros@localhost:5432/teacheros_test
+          REDIS_URL: redis://localhost:6379/0
+        run: pytest tests/integration tests/api tests/contract tests/document_pipeline tests/celery -ra
+
+      - name: Performance smoke tests
+        run: pytest tests/performance -ra
+
+  security-scan-build:
+    name: Security Scan and Build Verification
+    runs-on: ubuntu-latest
+    needs: integration-contract-performance
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install bandit
+
+      - name: Security scan
+        run: bandit -r backend/src -x backend/src/tests
+
+      - name: Build verification
+        run: python -m compileall backend/src tests

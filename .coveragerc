@@ -1,0 +1,23 @@
+[run]
+branch = True
+source = backend/src
+omit =
+    */tests/*
+    */temp_test.py
+    */__pycache__/*
+
+[report]
+show_missing = True
+skip_covered = True
+fail_under = 80
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml
