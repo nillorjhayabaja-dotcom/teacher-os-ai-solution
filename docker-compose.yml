@@ -263,6 +263,13 @@ services:
       start_period: 60s
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
+      - /app/uploads
     logging:
       driver: "json-file"
       options:
@@ -324,11 +331,11 @@ services:
     volumes:
       - redis_data:/data
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD:-changeme}"]
     networks:
       - backend-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -519,15 +526,15 @@ services:
       alembic upgrade head &&
       echo 'Migrations complete' &&
       python -c \"
-        from backend.src.domains.auth import UserRepository;
+        import os, secrets
         from backend.src.infrastructure.database import SessionLocal;
-        db = SessionLocal();
-        # Seed admin user if not exists
         from backend.src.domains.auth.models import User;
+        from backend.src.security.password_service import PasswordService;
+        db = SessionLocal();
         admin = db.query(User).filter(User.email == 'admin@teacheros.ph').first();
         if not admin:
-          from backend.src.security.auth_service import AuthService;
-          auth_service = AuthService();
+          admin_password = os.environ.get('ADMIN_INITIAL_PASSWORD') or secrets.token_urlsafe(24);
+          ps = PasswordService();
           admin = User(
             email='admin@teacheros.ph',
             username='admin',
@@ -536,10 +543,11 @@ services:
             is_verified=True,
             tenant_id='00000000-0000-0000-0000-000000000001'
           );
-          admin.password_hash = auth_service.hash_password('Admin123!@#');
+          admin.password_hash = ps.hash_password(admin_password);
           db.add(admin);
           db.commit();
-          print('Admin user created');
+          print(f'Admin user created - temporary password: {admin_password}');
+          print('IMPORTANT: Change this password on first login or via ADMIN_INITIAL_PASSWORD env var');
       \" || true;
       echo 'Database initialization complete'
       "

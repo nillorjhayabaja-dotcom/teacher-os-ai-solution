@@ -150,7 +150,7 @@ backup_config() {
     
     local backup_file="${BACKUP_DIR}/config/${BACKUP_NAME}.tar.gz"
     
-    # Backup configuration files
+    # Backup configuration files (exclude .env files containing secrets)
     tar czf "$backup_file" \
         -C . \
         --exclude='node_modules' \
@@ -158,7 +158,8 @@ backup_config() {
         --exclude='data' \
         --exclude='*.pyc' \
         --exclude='__pycache__' \
-        .env.* docker-compose*.yml docker/ infra/ nginx/ 2>/dev/null || true
+        --exclude='.env.*' \
+        docker-compose*.yml docker/ infra/ nginx/ 2>/dev/null || true
     
     if [ -s "$backup_file" ]; then
         log_success "Configuration backup saved: ${backup_file}"

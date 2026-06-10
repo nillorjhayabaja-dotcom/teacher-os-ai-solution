@@ -460,34 +460,18 @@ class PolicyEngine:
         """Check authorization with tenant isolation enforcement.
 
         Ensures users can only access resources within their own tenant.
+        Thread-safe: does not mutate the shared policies list.
         """
+        # SECURITY: Check tenant isolation directly without mutating shared state
+        if user_tenant_id is not None and user_tenant_id != resource_tenant_id:
+            raise InsufficientPermissionsError("Cross-tenant access is not allowed")
+
         context = {
             "resource_tenant_id": resource_tenant_id,
             "user_tenant_id": user_tenant_id,
         }
 
-        # Add tenant isolation policy
-        tenant_policy = Policy(
-            name="Tenant Isolation",
-            effect=PolicyEffect.DENY,
-            permissions={permission},
-            conditions=[
-                PolicyCondition(
-                    attribute="user_tenant_id",
-                    operator="neq",
-                    value=resource_tenant_id,
-                ),
-            ],
-            priority=100,  # High priority
-            description="Cross-tenant access is not allowed",
-        )
-
-        # Temporarily add and evaluate
-        self._policies.append(tenant_policy)
-        try:
-            return self.authorize(user_id, permission, context)
-        finally:
-            self._policies.remove(tenant_policy)
+        return self.authorize(user_id, permission, context)
 
     def get_user_permissions(self, user_id: str) -> Set[str]:
         """Get all effective permissions for a user."""

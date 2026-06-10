@@ -38,20 +38,43 @@ class EncryptionService:
     def __init__(self, encryption_key: Optional[str] = None) -> None:
         key_material = encryption_key or settings.ENCRYPTION_KEY
         if not key_material:
+            if settings.ENVIRONMENT == "production":
+                raise EncryptionError(
+                    "ENCRYPTION_KEY must be set in production. "
+                    "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                )
             # Development fallback - generates a deterministic key
-            # WARNING: This is NOT secure for production!
+            import warnings
+            warnings.warn(
+                "Using development encryption key - NOT for production! "
+                "Set ENCRYPTION_KEY environment variable.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             key_material = "teacher-os-dev-encryption-key-change-in-production"
 
         self._key = self._derive_key(key_material.encode())
         self._algorithm = settings.ENCRYPTION_ALGORITHM
 
     def _derive_key(self, key_material: bytes) -> bytes:
-        """Derive a 256-bit AES key from key material using HKDF."""
-        salt = b"teacher-os-encryption-salt-32bytes"  # Fixed salt for deterministic derivation
+        """Derive a 256-bit AES key from key material using HKDF.
+        
+        Uses a per-environment salt derived from the key material itself
+        plus a domain-separated info string. For production, the salt should
+        be generated during initial deployment and stored securely.
+        """
+        # Generate deterministic but unique salt from key material and domain info
+        # to avoid rainbow table attacks while still being reproducible
+        import hashlib
+        salt_input = hashlib.sha256(
+            key_material + b"teacher-os-salt-derivation" + (
+                settings.ENVIRONMENT.encode() if settings.ENVIRONMENT else b"development"
+            )
+        ).digest()
         hkdf = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=salt,
+            salt=salt_input,
             info=b"teacher-os-aes-256-gcm-key",
         )
         return hkdf.derive(key_material)

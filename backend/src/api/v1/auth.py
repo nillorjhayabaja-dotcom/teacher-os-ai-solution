@@ -81,7 +81,6 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=12)
     first_name: str
     last_name: str
-    role: str = ROLE_TEACHER
     organization_id: Optional[str] = None
     school_id: Optional[str] = None
 
@@ -193,13 +192,16 @@ def register(req: RegisterRequest, request: Request):
     user_id = str(uuid4())
     hashed = svc["password_service"].hash_password(req.password)
 
+    # SECURITY: Never trust user-supplied role - always assign default role
+    assigned_role = ROLE_TEACHER
+
     _users_db[user_id] = {
         "id": user_id,
         "email": req.email,
         "password_hash": hashed,
         "first_name": req.first_name,
         "last_name": req.last_name,
-        "role": req.role,
+        "role": assigned_role,
         "mfa_enabled": False,
         "mfa_secret": None,
         "organization_id": req.organization_id,
@@ -208,7 +210,7 @@ def register(req: RegisterRequest, request: Request):
     }
 
     # Assign role in RBAC
-    svc["rbac_service"].role_engine.assign_role(user_id, req.role)
+    svc["rbac_service"].role_engine.assign_role(user_id, assigned_role)
 
     # Log event
     svc["event_service"].record_event(EVENT_LOGIN_SUCCESS, {"user_id": user_id})
@@ -347,11 +349,54 @@ def refresh(req: TokenRefreshRequest, request: Request):
 
 @router.post("/logout")
 def logout(request: Request):
-    """Logout and revoke the current session."""
+    """Logout and revoke the current session and invalidate the token."""
     svc = _get_services(request)
     user_id = getattr(request.state, "user_id", None)
 
     if user_id:
+        # Revoke the access token by adding it to the blacklist
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.removeprefix("Bearer ").strip()
+            try:
+                payload = svc["jwt_service"].decode(token, verify_exp=False)
+                import datetime as _dt
+                jti = payload.get("jti", "")
+                expires_at = _dt.datetime.fromtimestamp(
+                    payload.get("exp", 0), tz=_dt.timezone.utc
+                )
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            pool.submit(
+                                asyncio.run,
+                                svc["token_service"].blacklist_token(
+                                    jti, user_id, expires_at, reason="logout"
+                                ),
+                            )
+                    else:
+                        loop.run_until_complete(
+                            svc["token_service"].blacklist_token(
+                                jti, user_id, expires_at, reason="logout"
+                            )
+                        )
+                except RuntimeError:
+                    asyncio.run(
+                        svc["token_service"].blacklist_token(
+                            jti, user_id, expires_at, reason="logout"
+                        )
+                    )
+            except Exception:
+                pass  # Token invalid/expired, proceed with logout
+
+        # Revoke the session
+        session_id = getattr(request.state, "session_id", None)
+        if session_id:
+            svc["session_service"].revoke_session(session_id)
+
         svc["event_service"].record_event(EVENT_LOGOUT, {"user_id": user_id})
 
     return {"detail": "Logged out successfully"}
@@ -399,8 +444,22 @@ def request_password_reset(req: PasswordResetRequest, request: Request):
 def confirm_password_reset(req: PasswordResetConfirm, request: Request):
     """Confirm a password reset with token."""
     svc = _get_services(request)
-    # Token validation would happen here in production
-    svc["event_service"].record_event(EVENT_PASSWORD_RESET, {"detail": "Password reset confirmed"})
+
+    # SECURITY: Actually validate the reset token
+    user_id = svc["password_service"].verify_reset_token(req.token)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user = _get_user_or_404(user_id)
+
+    # Hash the new password
+    user["password_hash"] = svc["password_service"].hash_password(req.new_password)
+
+    # Mark token as used (one-time use)
+    svc["password_service"].mark_reset_token_used(req.token)
+
+    svc["event_service"].record_event(EVENT_PASSWORD_RESET, {"user_id": user_id})
+
     return {"detail": "Password has been reset successfully"}
 
 

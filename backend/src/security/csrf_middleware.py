@@ -96,13 +96,19 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return response
 
     def _set_csrf_cookie(self, response: Response) -> None:
-        """Set or refresh the CSRF cookie on the response."""
+        """Set or refresh the CSRF cookie on the response.
+        
+        SECURITY NOTE: httponly MUST be False for the double-submit cookie pattern
+        because JavaScript needs to read the cookie value and send it as a header.
+        SameSite=Strict provides the CSRF protection; httponly is for XSS cookie theft.
+        """
         token = self._generate_token()
         response.set_cookie(
             key=self._cookie_name,
             value=token,
             max_age=3600,  # 1 hour
-            httponly=True,
+            httponly=False,  # Must be readable by JS for double-submit pattern
             samesite="strict",
             secure=settings.ENVIRONMENT != "development",
+            path="/",
         )

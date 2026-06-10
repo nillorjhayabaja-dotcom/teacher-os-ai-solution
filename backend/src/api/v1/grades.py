@@ -121,6 +121,11 @@ def list_grades(
 
     grades_list = list(_grades_db.values())
 
+    # SECURITY: Enforce tenant isolation - users can only see grades within their tenant
+    tenant_id = getattr(request.state, "user_tenant_id", None)
+    if tenant_id:
+        grades_list = [g for g in grades_list if g.get("tenant_id") == tenant_id]
+
     if student_id:
         grades_list = [g for g in grades_list if g["student_id"] == student_id]
     if subject:

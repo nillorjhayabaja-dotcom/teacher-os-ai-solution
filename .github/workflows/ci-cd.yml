@@ -216,6 +216,10 @@ jobs:
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
 
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
     strategy:
       matrix:
         service: [frontend, api, worker]
@@ -236,8 +240,8 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
 
       - name: Extract metadata
         id: meta
@@ -245,7 +249,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository }}/teacheros-${{ matrix.service }}
-            ${{ secrets.DOCKER_USERNAME }}/teacheros-${{ matrix.service }}
+            ${{ github.repository_owner }}/teacheros-${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -277,32 +281,40 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/develop'
-    environment:
-      name: staging
-      url: https://staging.teacheros.ph
+    environment: staging
+
+    env:
+      STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_PORT: ${{ secrets.STAGING_PORT }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+          eval $(ssh-agent -s)
+          echo "${{ env.STAGING_SSH_KEY }}" | ssh-add -
+          ssh-keyscan -H "${{ env.STAGING_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Copy deployment files
         run: |
+          PORT="${{ env.STAGING_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
           rsync -avz --delete \
-            -e "ssh -p ${{ secrets.STAGING_PORT || 22 }}" \
+            -e "ssh -p $PORT" \
             ./docker-compose.yml \
             ./docker-compose.prod.yml \
             .env.staging \
             ./infra/ \
-            ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/teacheros/
+            ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }}:/opt/teacheros/
+
 
       - name: Deploy with Docker Compose
         run: |
-          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} \
+          ssh ${{ env.STAGING_USER }}@${{ env.STAGING_HOST }} \
             "cd /opt/teacheros && \
              docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && \
              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans && \
@@ -314,39 +326,49 @@ jobs:
           curl -f --retry 5 --retry-delay 10 https://staging.teacheros.ph/health
 
   # ===========================================================================
+  # ===========================================================================
   # Deploy to Production
   # ===========================================================================
   deploy-production:
+
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/v')
-    environment:
-      name: production
-      url: https://teacheros.ph
+    environment: production
+
+    env:
+      PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+      PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+      PRODUCTION_PORT: ${{ secrets.PRODUCTION_PORT }}
+      PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+          eval $(ssh-agent -s)
+          echo "${{ env.PRODUCTION_SSH_KEY }}" | ssh-add -
+          ssh-keyscan -H "${{ env.PRODUCTION_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Copy deployment files
         run: |
+          PORT="${{ env.PRODUCTION_PORT }}"
+          if [ -z "$PORT" ]; then PORT=22; fi
           rsync -avz --delete \
-            -e "ssh -p ${{ secrets.PRODUCTION_PORT || 22 }}" \
+            -e "ssh -p $PORT" \
             ./docker-compose.yml \
             ./docker-compose.prod.yml \
             .env.production \
             ./infra/ \
-            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}:/opt/teacheros/
+            ${{ env.PRODUCTION_USER }}@${{ env.PRODUCTION_HOST }}:/opt/teacheros/
+
 
       - name: Deploy with Docker Compose
         run: |
-          ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} \
+          ssh ${{ env.PRODUCTION_USER }}@${{ env.PRODUCTION_HOST }} \
             "cd /opt/teacheros && \
              docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && \
              docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans && \
