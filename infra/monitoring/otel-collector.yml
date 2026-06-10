@@ -1,0 +1,63 @@
+# =============================================================================
+# TeacherOS - OpenTelemetry Collector Configuration
+# =============================================================================
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: teacheros
+    const_labels:
+      environment: ${APP_ENVIRONMENT:-development}
+  
+  logging:
+    loglevel: debug
+  
+  otlp:
+    endpoint: teacheros-tempo:4317
+    tls:
+      insecure: true
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  attributes:
+    actions:
+      - key: environment
+        value: ${APP_ENVIRONMENT:-development}
+        action: upsert
+      - key: service.name
+        from_attribute: service.name
+        action: upsert
+  resourcedetection:
+    detectors: [docker, env]
+    timeout: 2s
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resourcedetection, attributes]
+      exporters: [otlp, logging]
+    
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resourcedetection, attributes]
+      exporters: [prometheus, logging]
+    
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resourcedetection, attributes]
+      exporters: [logging]

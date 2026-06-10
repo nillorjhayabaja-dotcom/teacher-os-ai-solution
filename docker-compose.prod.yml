@@ -1,0 +1,748 @@
+# =============================================================================
+# TeacherOS - Docker Compose (Production Override)
+# =============================================================================
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+name: teacheros-prod
+
+# =============================================================================
+# Services
+# =============================================================================
+services:
+  # ===========================================================================
+  # Reverse Proxy (Production)
+  # ===========================================================================
+  teacheros-proxy:
+    image: nginx:1.26-alpine
+    container_name: teacheros-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/security-headers.conf:/etc/nginx/security-headers.conf:ro
+      - nginx_logs:/var/log/nginx
+      - ./data/certbot/conf:/etc/nginx/ssl:ro
+      - ./data/certbot/www:/var/www/certbot:ro
+    networks:
+      - frontend-network
+    depends_on:
+      teacheros-frontend:
+        condition: service_healthy
+      teacheros-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "proxy"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Frontend (Production)
+  # ===========================================================================
+  teacheros-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      target: production
+      args:
+        ENVIRONMENT: production
+    image: ${REGISTRY:-docker.io}/${REGISTRY_USERNAME:-teacheros}/teacheros-frontend:${IMAGE_TAG:-latest}
+    container_name: teacheros-frontend
+    restart: always
+    expose:
+      - "3000"
+    volumes:
+      - uploads_data:/app/public/uploads:ro
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=/api
+      - NEXT_PUBLIC_WS_URL=/ws
+    networks:
+      - frontend-network
+    depends_on:
+      teacheros-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "frontend"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Backend API (Production)
+  # ===========================================================================
+  teacheros-api:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+      target: production
+    image: ${REGISTRY:-docker.io}/${REGISTRY_USERNAME:-teacheros}/teacheros-api:${IMAGE_TAG:-latest}
+    container_name: teacheros-api
+    restart: always
+    expose:
+      - "8000"
+    volumes:
+      - api_logs:/app/logs
+      - uploads_data:/app/uploads
+      - ./keys:/app/keys:ro
+    env_file:
+      - .env.production
+    environment:
+      - APP_ENVIRONMENT=production
+      - APP_DEBUG=false
+    networks:
+      - frontend-network
+      - backend-network
+      - monitoring-network
+    depends_on:
+      teacheros-postgres:
+        condition: service_healthy
+      teacheros-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "api"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # PostgreSQL (Production - with replication)
+  # ===========================================================================
+  teacheros-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: teacheros-postgres
+    restart: always
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infra/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    env_file:
+      - .env.production
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-teacheros}
+      - POSTGRES_USER=${POSTGRES_USER:-teacheros}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
+    command:
+      - "-c"
+      - "config_file=/etc/postgresql/postgresql.conf"
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-teacheros} -d ${POSTGRES_DB:-teacheros}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 512mb
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+      restart_policy:
+        condition: any
+        delay: 10s
+        max_attempts: 5
+        window: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "postgres"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Redis (Production)
+  # ===========================================================================
+  teacheros-redis:
+    image: redis:7.4-alpine
+    container_name: teacheros-redis
+    restart: always
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD}"]
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "redis"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Celery Worker (Production - Scaled)
+  # ===========================================================================
+  teacheros-worker:
+    build:
+      context: .
+      dockerfile: docker/celery/Dockerfile
+      target: production
+    image: ${REGISTRY:-docker.io}/${REGISTRY_USERNAME:-teacheros}/teacheros-worker:${IMAGE_TAG:-latest}
+    container_name: teacheros-worker
+    restart: always
+    volumes:
+      - worker_logs:/app/logs
+      - uploads_data:/app/uploads
+      - ./keys:/app/keys:ro
+    env_file:
+      - .env.production
+    environment:
+      - APP_ENVIRONMENT=production
+    networks:
+      - backend-network
+      - storage-network
+      - monitoring-network
+    depends_on:
+      teacheros-postgres:
+        condition: service_healthy
+      teacheros-redis:
+        condition: service_healthy
+      teacheros-storage:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 2G
+        reservations:
+          cpus: '2.0'
+          memory: 1G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "worker"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Celery Beat (Production - Single instance)
+  # ===========================================================================
+  teacheros-scheduler:
+    build:
+      context: .
+      dockerfile: docker/celery/Dockerfile
+      target: production
+    image: ${REGISTRY:-docker.io}/${REGISTRY_USERNAME:-teacheros}/teacheros-scheduler:${IMAGE_TAG:-latest}
+    container_name: teacheros-scheduler
+    restart: always
+    volumes:
+      - worker_logs:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - APP_ENVIRONMENT=production
+    command: >
+      celery -A backend.src.tasks.celery_app beat
+      --loglevel=info
+      --scheduler=django_celery_beat.schedulers:DatabaseScheduler
+      --pidfile=/tmp/celerybeat.pid
+    networks:
+      - backend-network
+    depends_on:
+      teacheros-postgres:
+        condition: service_healthy
+      teacheros-redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "scheduler"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # MinIO (Production)
+  # ===========================================================================
+  teacheros-storage:
+    image: minio/minio:latest
+    container_name: teacheros-storage
+    restart: always
+    expose:
+      - "9000"
+    volumes:
+      - minio_data:/data
+    env_file:
+      - .env.production
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_DOMAIN=teacheros-storage
+    command: server /data
+    networks:
+      - storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "storage"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Prometheus (Production)
+  # ===========================================================================
+  teacheros-prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: teacheros-prometheus
+    restart: always
+    expose:
+      - "9090"
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'
+      - '--storage.tsdb.retention.size=50GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "http://localhost:9090/-/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "prometheus"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Grafana (Production)
+  # ===========================================================================
+  teacheros-grafana:
+    image: grafana/grafana:11.5.2
+    container_name: teacheros-grafana
+    restart: always
+    expose:
+      - "3001"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    env_file:
+      - .env.production
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_HTTP_PORT=3000
+      - GF_SERVER_ROOT_URL=https://monitor.teacheros.ph
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    networks:
+      - monitoring-network
+    depends_on:
+      teacheros-prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      com.teacheros.service: "grafana"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Certbot (SSL Certificate Renewal)
+  # ===========================================================================
+  teacheros-certbot:
+    image: certbot/certbot:latest
+    container_name: teacheros-certbot
+    restart: unless-stopped
+    volumes:
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "
+      trap exit TERM;
+      while true; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h;
+      done
+      "
+    networks:
+      - frontend-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - ssl
+    labels:
+      com.teacheros.service: "certbot"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # OpenTelemetry Collector
+  # ===========================================================================
+  teacheros-otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    container_name: teacheros-otel-collector
+    restart: unless-stopped
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+    volumes:
+      - ./infra/monitoring/otel-collector.yml:/etc/otel-collector.yml:ro
+    command: ["--config=/etc/otel-collector.yml"]
+    networks:
+      - monitoring-network
+      - backend-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - observability
+    labels:
+      com.teacheros.service: "otel-collector"
+
+  # ===========================================================================
+  # Loki (Log Aggregation)
+  # ===========================================================================
+  teacheros-loki:
+    image: grafana/loki:3.4.2
+    container_name: teacheros-loki
+    restart: unless-stopped
+    expose:
+      - "3100"
+    volumes:
+      - ./data/loki:/loki
+      - ./infra/monitoring/loki.yml:/etc/loki/loki.yml:ro
+    command: -config.file=/etc/loki/loki.yml
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    profiles:
+      - observability
+    labels:
+      com.teacheros.service: "loki"
+
+  # ===========================================================================
+  # Promtail (Log Collector)
+  # ===========================================================================
+  teacheros-promtail:
+    image: grafana/promtail:3.4.2
+    container_name: teacheros-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./infra/monitoring/promtail.yml:/etc/promtail/promtail.yml:ro
+      - nginx_logs:/var/log/nginx:ro
+      - api_logs:/var/log/api:ro
+      - worker_logs:/var/log/worker:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - monitoring-network
+    depends_on:
+      - teacheros-loki
+    profiles:
+      - observability
+    labels:
+      com.teacheros.service: "promtail"
+
+  # ===========================================================================
+  # PostgreSQL Backup (Production)
+  # ===========================================================================
+  teacheros-backup-postgres:
+    image: prodrigestivill/postgres-backup-local:17
+    container_name: teacheros-backup-postgres
+    restart: unless-stopped
+    volumes:
+      - backup_data:/backups
+    env_file:
+      - .env.production
+    environment:
+      - POSTGRES_HOST=teacheros-postgres
+      - POSTGRES_DB=${POSTGRES_DB:-teacheros}
+      - POSTGRES_USER=${POSTGRES_USER:-teacheros}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SCHEDULE=@daily
+      - BACKUP_DIR=/backups/postgres
+      - BACKUP_KEEP_DAYS=30
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=3
+      - HEALTHCHECK_PORT=8080
+    networks:
+      - backend-network
+    depends_on:
+      teacheros-postgres:
+        condition: service_healthy
+    profiles:
+      - backup
+    labels:
+      com.teacheros.service: "backup-postgres"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Database Initialization (Production)
+  # ===========================================================================
+  teacheros-db-init:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+      target: production
+    image: ${REGISTRY:-docker.io}/${REGISTRY_USERNAME:-teacheros}/teacheros-db-init:${IMAGE_TAG:-latest}
+    container_name: teacheros-db-init
+    depends_on:
+      teacheros-postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      - APP_ENVIRONMENT=production
+    command: >
+      sh -c "
+      alembic upgrade head &&
+      echo 'Migrations complete'
+      "
+    networks:
+      - backend-network
+    restart: "no"
+    labels:
+      com.teacheros.service: "db-init"
+      com.teacheros.environment: "production"
+
+  # ===========================================================================
+  # Health Check Aggregator
+  # ===========================================================================
+  teacheros-healthcheck:
+    image: alpine:3.21
+    container_name: teacheros-healthcheck
+    restart: unless-stopped
+    entrypoint: >
+      /bin/sh -c "
+      while true; do
+        echo '=== Health Check Report ===';
+        echo '--- PostgreSQL ---';
+        wget -qO- http://teacheros-postgres:5432 || echo 'FAIL';
+        echo '--- Redis ---';
+        wget -qO- http://teacheros-redis:6379 || echo 'FAIL';
+        echo '--- API ---';
+        wget -qO- http://teacheros-api:8000/health || echo 'FAIL';
+        echo '--- Frontend ---';
+        wget -qO- http://teacheros-frontend:3000/health || echo 'FAIL';
+        echo '--- MinIO ---';
+        wget -qO- http://teacheros-storage:9000/minio/health/live || echo 'FAIL';
+        echo '--- Prometheus ---';
+        wget -qO- http://teacheros-prometheus:9090/-/ready || echo 'FAIL';
+        echo '=========================';
+        sleep 300;
+      done
+      "
+    networks:
+      - frontend-network
+      - backend-network
+      - monitoring-network
+      - storage-network
+    depends_on:
+      teacheros-api:
+        condition: service_healthy
+    profiles:
+      - debug
+    labels:
+      com.teacheros.service: "healthcheck"

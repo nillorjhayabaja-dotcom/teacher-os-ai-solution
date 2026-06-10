@@ -1,0 +1,19 @@
+# =============================================================================
+# TeacherOS - Grafana Dashboard Provisioning
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'TeacherOS Default'
+    orgId: 1
+    folder: 'TeacherOS'
+    folderUid: 'teacheros'
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

@@ -1,0 +1,160 @@
+# =============================================================================
+# TeacherOS - Prometheus Configuration
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+  # External labels for cross-cluster identification
+  external_labels:
+    environment: ${APP_ENVIRONMENT:-development}
+    service: teacheros
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+      scheme: http
+      timeout: 10s
+
+# Rule files
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ===========================================================================
+  # Self-monitoring
+  # ===========================================================================
+  - job_name: 'prometheus'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ===========================================================================
+  # Backend API
+  # ===========================================================================
+  - job_name: 'teacheros-api'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - 'teacheros-api:8000'
+        labels:
+          service: api
+          team: backend
+
+  # ===========================================================================
+  # PostgreSQL Exporter
+  # ===========================================================================
+  - job_name: 'teacheros-postgres'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'teacheros-postgres-exporter:9187'
+        labels:
+          service: postgres
+          team: database
+
+  # ===========================================================================
+  # Redis Exporter
+  # ===========================================================================
+  - job_name: 'teacheros-redis'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'teacheros-redis-exporter:9121'
+        labels:
+          service: redis
+          team: infrastructure
+
+  # ===========================================================================
+  # Celery Workers (via Flower exporter)
+  # ===========================================================================
+  - job_name: 'teacheros-workers'
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - 'teacheros-flower:5555'
+        labels:
+          service: celery
+          team: backend
+
+  # ===========================================================================
+  # Nginx
+  # ===========================================================================
+  - job_name: 'teacheros-proxy'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'teacheros-proxy:9113'  # nginx-exporter
+        labels:
+          service: proxy
+          team: infrastructure
+
+  # ===========================================================================
+  # Docker Host (if cadvisor is running)
+  # ===========================================================================
+  - job_name: 'teacheros-containers'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'teacheros-cadvisor:8080'
+        labels:
+          service: containers
+          team: infrastructure
+
+  # ===========================================================================
+  # Node Exporter (host metrics)
+  # ===========================================================================
+  - job_name: 'teacheros-node'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'teacheros-node-exporter:9100'
+        labels:
+          service: host
+          team: infrastructure
+
+  # ===========================================================================
+  # MinIO
+  # ===========================================================================
+  - job_name: 'teacheros-minio'
+    scrape_interval: 30s
+    metrics_path: /minio/v2/metrics/cluster
+    scheme: http
+    static_configs:
+      - targets:
+          - 'teacheros-storage:9000'
+        labels:
+          service: storage
+          team: infrastructure
+
+  # ===========================================================================
+  # OpenTelemetry Collector
+  # ===========================================================================
+  - job_name: 'teacheros-otel-collector'
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - 'teacheros-otel-collector:8888'
+        labels:
+          service: otel
+          team: observability
+
+  # ===========================================================================
+  # Prometheus Pushgateway (for batch jobs)
+  # ===========================================================================
+  - job_name: 'teacheros-pushgateway'
+    scrape_interval: 30s
+    honor_labels: true
+    static_configs:
+      - targets:
+          - 'teacheros-prometheus-pushgateway:9091'
+        labels:
+          service: batch-jobs
+          team: backend
