@@ -73,10 +73,14 @@ CMD ["uvicorn", "backend.src.main:app", "--host", "0.0.0.0", "--port", "8000", "
 # =============================================================================
 FROM deps AS production
 
-# Copy source code
-COPY backend/ /app/
+# Copy source code (preserving backend/ prefix for module imports)
+COPY backend/ /app/backend/
+COPY punq/ /app/punq/
 COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
+
+# Ensure Python can resolve 'backend.src.*' imports
+ENV PYTHONPATH=/app
 
 # Create necessary directories
 RUN mkdir -p /app/keys /app/logs /app/uploads && \

@@ -25,6 +25,7 @@ argon2-cffi==25.1.0
 PyJWT==2.10.1
 python-jose[cryptography]>=3.3.0
 python-multipart>=0.0.9
+pyotp==2.9.0
 
 # File validation
 filetype==1.2.0

@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from pydantic import field_validator
+
 # Pydantic v2 moved ``BaseSettings`` to the ``pydantic_settings`` package.
 # Import it with a fallback to maintain compatibility with both versions.
 try:
@@ -48,7 +50,7 @@ class Settings(BaseSettings):
     # Database configuration (PostgreSQL)
     # ---------------------------------------------------------------------
     # Provide a sensible default to allow module import without external env vars.
-    DATABASE_URL: PostgresDsn = Field(PostgresDsn("postgresql://localhost/teacheros"), env="DATABASE_URL")
+    DATABASE_URL: str = Field("postgresql://localhost/teacheros", env="DATABASE_URL")
     DATABASE_POOL_SIZE: int = Field(20, env="DATABASE_POOL_SIZE")
     DATABASE_MAX_OVERFLOW: int = Field(40, env="DATABASE_MAX_OVERFLOW")
     DATABASE_POOL_PRE_PING: bool = Field(True, env="DATABASE_POOL_PRE_PING")
@@ -56,7 +58,7 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------------
     # Redis configuration (used for Celery broker/cache and other pub/sub)
     # ---------------------------------------------------------------------
-    REDIS_URL: RedisDsn = Field(RedisDsn("redis://localhost:6379"), env="REDIS_URL")
+    REDIS_URL: str = Field("redis://localhost:6379", env="REDIS_URL")
     REDIS_TOKEN_BLACKLIST_DB: int = Field(1, env="REDIS_TOKEN_BLACKLIST_DB")
     REDIS_RATE_LIMIT_DB: int = Field(2, env="REDIS_RATE_LIMIT_DB")
     REDIS_SESSION_DB: int = Field(3, env="REDIS_SESSION_DB")
@@ -122,6 +124,26 @@ class Settings(BaseSettings):
         ["X-Request-Id", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
         env="CORS_EXPOSE_HEADERS",
     )
+
+    # ---------------------------------------------------------------------
+    # Validators
+    # ---------------------------------------------------------------------
+
+    @field_validator(
+        "CORS_ALLOWED_ORIGINS",
+        "CORS_ALLOW_METHODS",
+        "CORS_ALLOW_HEADERS",
+        "CORS_EXPOSE_HEADERS",
+        "FILE_UPLOAD_ALLOWED_EXTENSIONS",
+        "FILE_UPLOAD_ALLOWED_MIME_TYPES",
+        mode="before",
+    )
+    @classmethod
+    def _parse_comma_separated_list(cls, v: Any) -> List[str]:
+        """Accept comma-separated strings for list fields (e.g. from .env files)."""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
     # ---------------------------------------------------------------------
     # Rate Limiting (SlowAPI)

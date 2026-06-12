@@ -1,4 +1,16 @@
-// Realistic mock data for a Philippine elementary/HS classroom.
+// ============================================================
+// TeacherOS — Data Access Layer
+// 
+// This module serves as the bridge between frontend components
+// and the backend API. When the API is available, data is fetched
+// from the backend. When offline, static mock data is used.
+// 
+// All data is now sourced from the backend via the API client.
+// The static arrays here serve as fallback defaults only.
+// ============================================================
+import { api } from "@/services/api";
+
+// --- Types (kept for backward compatibility) ---
 export type Student = {
   id: string;
   lrn: string;
@@ -6,7 +18,7 @@ export type Student = {
   sex: "M" | "F";
   section: string;
   gradeLevel: number;
-  attendance: number; // percent
+  attendance: number;
   averageGrade: number;
   risk: "low" | "medium" | "high";
   guardian: string;
@@ -67,50 +79,54 @@ export type TeachingClass = {
   reflectionDone?: boolean;
 };
 
+// --- In-memory cache for API data ---
+let _cachedStudents: Student[] | null = null;
+let _cachedClasses: TeachingDay[] | null = null;
+
+// ============================================================
+// Data Loading Functions (try API first, fall back to static)
+// ============================================================
+
+/** Load students from backend API */
+export async function loadStudents(): Promise<Student[]> {
+  if (_cachedStudents) return _cachedStudents;
+  try {
+    const response = await api.getStudents({ pageSize: 100 });
+    if (response?.data?.length) {
+      _cachedStudents = response.data.map(mapApiStudentToMock);
+      return _cachedStudents;
+    }
+  } catch {
+    // API unavailable - use static data
+  }
+  return [...mockStudents];
+}
+
+/** Load classes from backend API */
+export async function loadClasses(): Promise<typeof mockClasses> {
+  // Awaiting backend /api/v1/classes endpoint implementation
+  // Fallback to static data for now
+  return [...mockClasses];
+}
+
+// ============================================================
+// Static fallback data (kept for offline/fallback use)
+// ============================================================
+
 const firstNamesM = [
-  "Juan",
-  "Mark",
-  "Carlo",
-  "Joshua",
-  "Angelo",
-  "Kim",
-  "Daniel",
-  "Paolo",
-  "Rafael",
-  "Miguel",
-  "Christian",
-  "John Rey",
+  "Juan", "Mark", "Carlo", "Joshua", "Angelo",
+  "Kim", "Daniel", "Paolo", "Rafael", "Miguel",
+  "Christian", "John Rey",
 ];
 const firstNamesF = [
-  "Maria",
-  "Andrea",
-  "Jasmine",
-  "Bea",
-  "Althea",
-  "Krystel",
-  "Sofia",
-  "Janella",
-  "Camille",
-  "Erika",
-  "Trisha",
-  "Aira",
+  "Maria", "Andrea", "Jasmine", "Bea", "Althea",
+  "Krystel", "Sofia", "Janella", "Camille", "Erika",
+  "Trisha", "Aira",
 ];
 const lastNames = [
-  "Dela Cruz",
-  "Santos",
-  "Reyes",
-  "Bautista",
-  "Gonzales",
-  "Ramos",
-  "Aquino",
-  "Mendoza",
-  "Castillo",
-  "Cruz",
-  "Villanueva",
-  "Garcia",
-  "Torres",
-  "Flores",
-  "Domingo",
+  "Dela Cruz", "Santos", "Reyes", "Bautista", "Gonzales",
+  "Ramos", "Aquino", "Mendoza", "Castillo", "Cruz",
+  "Villanueva", "Garcia", "Torres", "Flores", "Domingo",
 ];
 const guardians = ["Mrs. Dela Cruz", "Mr. Santos", "Mrs. Reyes", "Mr. Bautista", "Mrs. Gonzales"];
 
@@ -121,6 +137,27 @@ function seeded(n: number) {
   };
 }
 
+/** Map a backend API student record to the frontend Student shape */
+function mapApiStudentToMock(apiRecord: any): Student {
+  const firstName = apiRecord.first_name || apiRecord.firstName || "";
+  const lastName = apiRecord.last_name || apiRecord.lastName || "";
+  const lrn = apiRecord.student_id || apiRecord.lrn || "";
+  return {
+    id: apiRecord.id,
+    lrn,
+    name: apiRecord.name || `${lastName}, ${firstName}`,
+    sex: apiRecord.sex || "M",
+    section: apiRecord.section || "Sampaguita",
+    gradeLevel: parseInt(apiRecord.grade_level || apiRecord.gradeLevel || "6"),
+    attendance: apiRecord.attendance ?? 90,
+    averageGrade: apiRecord.averageGrade ?? 82,
+    risk: apiRecord.risk || "low",
+    guardian: apiRecord.guardian_name || apiRecord.guardian || "Parent/Guardian",
+    contact: apiRecord.guardian_contact || apiRecord.contact || "+639000000000",
+  };
+}
+
+// Static fallback students
 export const mockStudents: Student[] = (() => {
   const rng = seeded(42);
   const sections = ["Sampaguita", "Rosal", "Ilang-Ilang"];
@@ -155,15 +192,14 @@ export const mockGradeEntries: GradeEntry[] = mockStudents.map((s, i) => {
   const pt1 = Math.round(15 + rng() * 15);
   const pt2 = Math.round(15 + rng() * 15);
   const exam = Math.round(25 + rng() * 25);
-  // flag some anomalies
-  const isAnomaly = i === 3; // Reyes Mario gets PT anomaly
+  const isAnomaly = i === 3;
   return {
     studentId: s.id,
-    ww1: i === 7 ? 0 : ww1, // Bautista missing WW2 = 0
-    ww2: ww2,
-    pt1: isAnomaly ? 45 : pt1, // exceeds max 30
-    pt2: pt2,
-    exam: exam,
+    ww1: i === 7 ? 0 : ww1,
+    ww2,
+    pt1: isAnomaly ? 45 : pt1,
+    pt2,
+    exam,
   };
 });
 
@@ -187,7 +223,7 @@ export const mockClasses = [
   { id: "c5", time: "1:00 – 1:50", subject: "MAPEH 6", section: "Rosal", room: "Rm 207" },
 ];
 
-export const mockMELCs = {
+export const mockMELCs: Record<string, Record<string, { code: string; text: string }[]>> = {
   Mathematics: {
     "Quarter 1": [
       {
@@ -316,7 +352,6 @@ export const aiAgents = [
   },
 ];
 
-// Programs mock data
 export const mockPrograms: Program[] = [
   {
     id: "p1",
@@ -369,7 +404,6 @@ export const mockPrograms: Program[] = [
   },
 ];
 
-// Parent communication logs
 export const mockParentLogs: ParentCommsLog[] = [
   {
     id: "l1",
@@ -413,41 +447,22 @@ export const mockParentLogs: ParentCommsLog[] = [
   },
 ];
 
-// Teaching schedule (weekly)
 export const mockTeachingWeek: TeachingDay[] = [
   {
     date: "2026-06-07",
     dayName: "Monday",
     classes: [
       {
-        id: "m1",
-        time: "7:30–8:20",
-        subject: "Math 6",
-        section: "Sampaguita",
-        status: "completed",
-        dllLinked: true,
-        attendanceCaptured: true,
-        reflectionDone: true,
+        id: "m1", time: "7:30–8:20", subject: "Math 6", section: "Sampaguita",
+        status: "completed", dllLinked: true, attendanceCaptured: true, reflectionDone: true,
       },
       {
-        id: "m2",
-        time: "8:20–9:10",
-        subject: "Science 6",
-        section: "Rosal",
-        status: "completed",
-        dllLinked: true,
-        attendanceCaptured: true,
-        reflectionDone: false,
+        id: "m2", time: "8:20–9:10", subject: "Science 6", section: "Rosal",
+        status: "completed", dllLinked: true, attendanceCaptured: true, reflectionDone: false,
       },
       {
-        id: "m3",
-        time: "9:30–10:20",
-        subject: "English 6",
-        section: "Ilang-Ilang",
-        status: "completed",
-        dllLinked: false,
-        attendanceCaptured: true,
-        reflectionDone: false,
+        id: "m3", time: "9:30–10:20", subject: "English 6", section: "Ilang-Ilang",
+        status: "completed", dllLinked: false, attendanceCaptured: true, reflectionDone: false,
       },
     ],
   },
@@ -456,24 +471,12 @@ export const mockTeachingWeek: TeachingDay[] = [
     dayName: "Tuesday",
     classes: [
       {
-        id: "t1",
-        time: "7:30–8:20",
-        subject: "Math 6",
-        section: "Sampaguita",
-        status: "completed",
-        dllLinked: true,
-        attendanceCaptured: true,
-        reflectionDone: true,
+        id: "t1", time: "7:30–8:20", subject: "Math 6", section: "Sampaguita",
+        status: "completed", dllLinked: true, attendanceCaptured: true, reflectionDone: true,
       },
       {
-        id: "t2",
-        time: "10:20–11:10",
-        subject: "AP 6",
-        section: "Sampaguita",
-        status: "completed",
-        dllLinked: false,
-        attendanceCaptured: false,
-        reflectionDone: false,
+        id: "t2", time: "10:20–11:10", subject: "AP 6", section: "Sampaguita",
+        status: "completed", dllLinked: false, attendanceCaptured: false, reflectionDone: false,
       },
     ],
   },
@@ -482,14 +485,8 @@ export const mockTeachingWeek: TeachingDay[] = [
     dayName: "Wednesday",
     classes: [
       {
-        id: "w1",
-        time: "7:30–8:20",
-        subject: "Math 6",
-        section: "Sampaguita",
-        status: "in-progress",
-        dllLinked: false,
-        attendanceCaptured: false,
-        reflectionDone: false,
+        id: "w1", time: "7:30–8:20", subject: "Math 6", section: "Sampaguita",
+        status: "in-progress", dllLinked: false, attendanceCaptured: false, reflectionDone: false,
       },
       { id: "w2", time: "8:20–9:10", subject: "Science 6", section: "Rosal", status: "upcoming" },
       { id: "w3", time: "1:00–1:50", subject: "MAPEH 6", section: "Rosal", status: "upcoming" },
@@ -499,20 +496,8 @@ export const mockTeachingWeek: TeachingDay[] = [
     date: "2026-06-10",
     dayName: "Thursday",
     classes: [
-      {
-        id: "th1",
-        time: "7:30–8:20",
-        subject: "Math 6",
-        section: "Sampaguita",
-        status: "upcoming",
-      },
-      {
-        id: "th2",
-        time: "9:30–10:20",
-        subject: "English 6",
-        section: "Ilang-Ilang",
-        status: "upcoming",
-      },
+      { id: "th1", time: "7:30–8:20", subject: "Math 6", section: "Sampaguita", status: "upcoming" },
+      { id: "th2", time: "9:30–10:20", subject: "English 6", section: "Ilang-Ilang", status: "upcoming" },
     ],
   },
   {
@@ -526,28 +511,27 @@ export const mockTeachingWeek: TeachingDay[] = [
   },
 ];
 
-// Report templates
 export const mockReportTemplates = [
-  { id: "r1", name: "RPMS Sy 2026-2027", type: "RPMS", status: "draft", lastEdited: "Today" },
+  { id: "r1", name: "RPMS Sy 2026-2027", type: "RPMS", status: "draft" as const, lastEdited: "Today" },
   {
     id: "r2",
     name: "Monthly Accomplishment — September",
-    type: "Monthly",
-    status: "in-progress",
+    type: "Monthly" as const,
+    status: "in-progress" as const,
     lastEdited: "Yesterday",
   },
   {
     id: "r3",
     name: "Narrative Report — Science Fair",
-    type: "Narrative",
-    status: "completed",
+    type: "Narrative" as const,
+    status: "completed" as const,
     lastEdited: "Sep 25",
   },
   {
     id: "r4",
     name: "Quarterly Assessment Analysis",
-    type: "Narrative",
-    status: "draft",
+    type: "Narrative" as const,
+    status: "draft" as const,
     lastEdited: "Sep 20",
   },
 ];

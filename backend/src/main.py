@@ -103,14 +103,11 @@ def create_app() -> FastAPI:
     # ----------------------------------------------------------------------
     @app.on_event("startup")
     async def startup() -> None:
-        """Initialize services on application startup."""
-        # In production, initialize database connections, Redis, etc.
-        pass
-
-    @app.on_event("shutdown")
-    async def shutdown() -> None:
-        """Clean up resources on application shutdown."""
-        pass
+        """Initialize services and seed data on application startup."""
+        # Seed in-memory data stores for development / demo
+        if settings.ENVIRONMENT in ("development", "demo"):
+            from backend.src.core.seed_data import seed_all_data
+            seed_all_data()
 
     return app
 

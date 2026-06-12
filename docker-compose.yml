@@ -26,7 +26,7 @@ networks:
     internal: true
     ipam:
       config:
-        - subnet: 172.21.0.0/16
+        - subnet: 172.24.0.0/16
     labels:
       com.teacheros.network: "backend"
 
@@ -35,7 +35,7 @@ networks:
     internal: false
     ipam:
       config:
-        - subnet: 172.22.0.0/16
+        - subnet: 172.25.0.0/16
     labels:
       com.teacheros.network: "monitoring"
 
@@ -44,7 +44,7 @@ networks:
     internal: true
     ipam:
       config:
-        - subnet: 172.23.0.0/16
+        - subnet: 172.26.0.0/16
     labels:
       com.teacheros.network: "storage"
 
@@ -239,8 +239,6 @@ services:
     expose:
       - "8000"
     volumes:
-      - api_logs:/app/logs
-      - uploads_data:/app/uploads
       - ./keys:/app/keys:ro
     env_file:
       - .env.${APP_ENVIRONMENT:-production}

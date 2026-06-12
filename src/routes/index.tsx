@@ -12,7 +12,6 @@ import {
   TrendingUp,
   MessageSquare,
 } from "lucide-react";
-import { mockClasses, pendingWorkflows, atRiskStudents, performanceTrend } from "@/lib/mock-data";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +24,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useDashboardBriefing, usePerformanceTrend, useAtRiskStudents, useStudents } from "@/hooks/use-queries";
+import { pendingWorkflows, performanceTrend, atRiskStudents } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -113,30 +114,9 @@ function DashboardPage() {
             </Link>
           </div>
           <ul className="divide-y divide-border">
-            {mockClasses.map((c, i) => (
-              <li
-                key={c.id}
-                className="flex items-center gap-4 p-4 hover:bg-muted/40 transition-colors"
-              >
-                <div className="w-24 shrink-0">
-                  <div className="text-xs font-mono text-muted-foreground">{c.time}</div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{c.subject}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {c.section} · {c.room}
-                  </div>
-                </div>
-                {i === 0 ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">
-                    NEXT
-                  </span>
-                ) : (
-                  <Clock className="size-4 text-muted-foreground" />
-                )}
-              </li>
-            ))}
+            <li className="p-5 text-sm text-muted-foreground">Classes feed pending backend wiring.</li>
           </ul>
+
         </div>
 
         {/* AI briefing */}

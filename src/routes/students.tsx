@@ -1,10 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
-import { mockStudents } from "@/lib/mock-data";
 import { AlertTriangle, TrendingUp, TrendingDown, Sparkles, Search } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import type { Student as StudentType } from "@/types";
+import { useStudents } from "@/hooks/use-queries";
+
+/** UI-specific student shape used by this page (extends backend Student with display fields) */
+type UIStudent = StudentType & {
+  name: string;
+  guardian: string;
+  contact: string;
+};
 
 export const Route = createFileRoute("/students")({
   head: () => ({ meta: [{ title: "Student Intelligence Hub · TeacherOS" }] }),
@@ -13,14 +21,56 @@ export const Route = createFileRoute("/students")({
 
 function StudentsPage() {
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState(mockStudents[0]);
-  const filtered = mockStudents.filter((s) => s.name.toLowerCase().includes(q.toLowerCase()));
+
+  const { data, isLoading, error } = useStudents({ pageSize: 100 });
+  const students = (data?.data ?? []).map((s): UIStudent => {
+    // Map backend student shape to the UI expectations used by this page.
+    // (Backend currently doesn't provide risk/attendance/grade aggregations; those sections remain static until
+    // corresponding backend endpoints are implemented.)
+    return {
+      ...s,
+      id: s.id,
+      lrn: (s as any).student_id ?? s.lrn ?? "",
+      name: `${s.firstName} ${s.lastName}`,
+      sex: (s as any).sex ?? "M",
+      section: (s as any).section ?? "",
+      gradeLevel: parseInt((s as any).grade_level ?? (s as any).gradeLevel ?? "6", 10),
+      attendance: (s as any).attendance ?? 90,
+      averageGrade: (s as any).averageGrade ?? 82,
+      risk: (s as any).risk ?? "low",
+      guardian: (s as any).guardian_name ?? (s as any).guardian ?? "Parent/Guardian",
+      contact: (s as any).guardian_contact ?? (s as any).contact ?? "+639000000000",
+    } as UIStudent;
+  });
+
+  const [selected, setSelected] = useState<UIStudent | null>(null);
+
+  const filtered = students.filter((s) => `${s.firstName} ${s.lastName}`.toLowerCase().includes(q.toLowerCase()));
+
+  if (isLoading) {
+    return (
+      <div className="px-4 lg:px-8 py-6 lg:py-8 max-w-[1600px] mx-auto">
+        <div className="text-sm text-muted-foreground">Loading students…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 lg:px-8 py-6 lg:py-8 max-w-[1600px] mx-auto">
+        <div className="text-sm text-destructive">Failed to load students.</div>
+      </div>
+    );
+  }
+
+  const resolvedSelected: UIStudent | null = (selected ?? filtered[0] ?? null) as UIStudent | null;
 
   return (
     <div className="px-4 lg:px-8 py-6 lg:py-8 max-w-[1600px] mx-auto space-y-6">
+
       <PageHeader
         eyebrow="Student Intelligence Hub"
-        title="40 learners · Grade 6 · 3 sections"
+        title="Learners"
         description="Risk prediction, intervention suggestions, and case management — powered by the Student Risk Analyst agent."
         actions={
           <Button className="gap-2">
@@ -29,6 +79,7 @@ function StudentsPage() {
           </Button>
         }
       />
+
 
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-5 rounded-xl border border-border bg-card">
@@ -50,7 +101,7 @@ function StudentsPage() {
                   onClick={() => setSelected(s)}
                   className={cn(
                     "w-full flex items-center gap-3 p-3 text-left hover:bg-muted/40",
-                    selected.id === s.id && "bg-primary-soft",
+                    resolvedSelected?.id === s.id && "bg-primary-soft",
                   )}
                 >
                   <div
@@ -63,7 +114,7 @@ function StudentsPage() {
                           : "bg-success/10 text-success",
                     )}
                   >
-                    {s.name.split(",")[0].slice(0, 2).toUpperCase()}
+                    {s.name.split(",")[0].split(" ")[0].slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{s.name}</div>
@@ -78,6 +129,7 @@ function StudentsPage() {
                 </button>
               </li>
             ))}
+
           </ul>
         </div>
 
@@ -85,39 +137,50 @@ function StudentsPage() {
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs font-mono text-muted-foreground">LRN {selected.lrn}</div>
-                <h2 className="text-xl font-display font-semibold">{selected.name}</h2>
+                <div className="text-xs font-mono text-muted-foreground">LRN {resolvedSelected?.lrn}</div>
+                <h2 className="text-xl font-display font-semibold">{resolvedSelected?.name}</h2>
                 <div className="text-xs text-muted-foreground">
-                  {selected.section} · Guardian: {selected.guardian} · {selected.contact}
+                  {resolvedSelected?.section} · Guardian: {resolvedSelected?.guardian} · {resolvedSelected?.contact}
                 </div>
               </div>
+
               <div
                 className={cn(
                   "text-xs font-semibold px-3 py-1.5 rounded-full",
-                  selected.risk === "high"
+                  resolvedSelected?.risk === "high"
                     ? "bg-destructive/10 text-destructive"
-                    : selected.risk === "medium"
+                    : resolvedSelected?.risk === "medium"
                       ? "bg-warning/15 text-warning-foreground"
                       : "bg-success/10 text-success",
                 )}
               >
-                {selected.risk.toUpperCase()} RISK
+                {(resolvedSelected?.risk ?? "low").toUpperCase()} RISK
               </div>
+
+
             </div>
 
             <div className="mt-5 grid sm:grid-cols-3 gap-3">
-              <Metric label="Average grade" value={selected.averageGrade.toString()} trend="up" />
+              <Metric
+                label="Average grade"
+                value={(resolvedSelected?.averageGrade ?? 0).toString()}
+                trend="up"
+              />
               <Metric
                 label="Attendance"
-                value={`${selected.attendance}%`}
-                trend={selected.attendance > 90 ? "up" : "down"}
+                value={`${resolvedSelected?.attendance ?? 0}%`}
+                trend={(resolvedSelected?.attendance ?? 0) > 90 ? "up" : "down"}
               />
               <Metric label="Behavior notes" value="2" trend="flat" />
             </div>
+
           </div>
 
-          {selected.risk !== "low" && (
+
+          {(resolvedSelected?.risk ?? "low") !== "low" && (
             <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-5">
+
+
               <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <Sparkles className="size-4" /> AI Intervention Suggestions
               </div>
